@@ -5,6 +5,7 @@ import jwt
 from fastapi import APIRouter, Form, HTTPException, status
 
 from misbot_auth_server.auth.forms import ClientCredentialsForm
+from misbot_auth_server.auth.keys import key_id
 from misbot_auth_server.auth.passwords import authenticate_client
 from misbot_auth_server.settings import settings
 
@@ -72,6 +73,9 @@ async def token(form_data: Annotated[ClientCredentialsForm, Form()]):
         payload,
         settings.jwt.private_key.get_secret_value(),
         algorithm=settings.jwt.algorithm,
+        # Names the signing key so verifiers can pick it out of the JWK Set,
+        # which is what makes rotating keys possible without downtime.
+        headers={"kid": key_id()},
     )
 
     return {
