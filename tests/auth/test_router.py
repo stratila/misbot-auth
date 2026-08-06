@@ -7,18 +7,31 @@ from misbot_auth_server.settings import settings
 
 
 @pytest.fixture
-def registered_client(monkeypatch):
-    client = Client(
-        client_id="test-client",
-        client_type="confidential",
-        hashed_secret=get_password_hash("s3cret"),
-        allowed_scopes=["read", "write"],
-    )
-    monkeypatch.setattr(
-        "misbot_auth_server.auth.passwords.get_client",
-        lambda client_id: client if client_id == "test-client" else None,
-    )
-    return client
+def register_client(monkeypatch):
+    """Register a client with the given overrides as the only known client."""
+
+    def _register(**overrides):
+        client = Client(
+            **{
+                "client_id": "test-client",
+                "client_type": "confidential",
+                "hashed_secret": get_password_hash("s3cret"),
+                "allowed_scopes": ["read", "write"],
+                **overrides,
+            }
+        )
+        monkeypatch.setattr(
+            "misbot_auth_server.auth.passwords.get_client",
+            lambda client_id: client if client_id == client.client_id else None,
+        )
+        return client
+
+    return _register
+
+
+@pytest.fixture
+def registered_client(register_client):
+    return register_client()
 
 
 def token_request(client, **overrides):
@@ -74,3 +87,30 @@ def test_token_rejects_disallowed_scope(client, registered_client):
 
     assert response.status_code == 401
     assert response.json()["detail"] == "invalid_scope"
+
+
+def test_token_rejects_disabled_client(client, register_client):
+    register_client(enabled=False)
+
+    response = token_request(client)
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "invalid_client"
+
+
+def test_token_rejects_public_client(client, register_client):
+    register_client(client_type="public")
+
+    response = token_request(client)
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "unauthorized_client"
+
+
+def test_token_rejects_client_not_registered_for_the_grant(client, register_client):
+    register_client(allowed_grants=["authorization_code"])
+
+    response = token_request(client)
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "unauthorized_client"

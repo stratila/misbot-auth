@@ -8,12 +8,14 @@ from misbot_auth_server.auth.forms import ClientCredentialsForm
 from misbot_auth_server.auth.passwords import authenticate_client
 from misbot_auth_server.settings import settings
 
+CLIENT_CREDENTIALS_GRANT = "client_credentials"
+
 auth_router = APIRouter()
 
 
 @auth_router.post("/token")
 async def token(form_data: Annotated[ClientCredentialsForm, Form()]):
-    if form_data.grant_type != "client_credentials":
+    if form_data.grant_type != CLIENT_CREDENTIALS_GRANT:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid_client",
@@ -26,6 +28,25 @@ async def token(form_data: Annotated[ClientCredentialsForm, Form()]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid_client",
+        )
+
+    # Registration policy is checked only after authentication, so an
+    # unauthenticated caller cannot probe a client's existence or state.
+    if not client.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid_client",
+        )
+
+    # Public clients cannot keep a secret confidential, so RFC 6749 §4.4
+    # restricts this grant to confidential clients registered to use it.
+    if (
+        client.client_type != "confidential"
+        or CLIENT_CREDENTIALS_GRANT not in client.allowed_grants
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="unauthorized_client",
         )
 
     for scope in form_data.scope.split(" "):
