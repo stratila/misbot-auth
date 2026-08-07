@@ -114,6 +114,18 @@ def test_missing_grant_type_is_an_invalid_request(client, registered_client):
     assert response.json()["error"] == "invalid_request"
 
 
+def test_token_response_shape_is_documented(client):
+    schema = client.get("/openapi.json").json()
+    ref = schema["paths"]["/token"]["post"]["responses"]["200"]["content"]["application/json"][
+        "schema"
+    ]["$ref"]
+
+    # A bare dict return would document the response as an empty object, leaving
+    # generated clients with nothing to deserialize into.
+    documented = schema["components"]["schemas"][ref.rsplit("/", 1)[-1]]
+    assert set(documented["properties"]) == {"access_token", "token_type", "expires_in", "scope"}
+
+
 class TestScopeDefaulting:
     def test_omitted_scope_grants_every_allowed_scope(self, client, registered_client):
         response = token_request(client, scope=None)

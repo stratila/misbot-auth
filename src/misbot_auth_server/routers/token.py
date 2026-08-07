@@ -6,15 +6,15 @@ from fastapi import APIRouter, Form, Header, Response
 
 from misbot_auth_server.auth.client_auth import resolve_client_credentials
 from misbot_auth_server.auth.errors import NO_STORE_HEADERS, OAuth2Error, invalid_client
-from misbot_auth_server.auth.forms import ClientCredentialsForm
 from misbot_auth_server.auth.keys import key_id
 from misbot_auth_server.auth.passwords import authenticate_client
 from misbot_auth_server.models.clients import Client
+from misbot_auth_server.schemas.token import ClientCredentialsForm, TokenResponse
 from misbot_auth_server.settings import settings
 
 CLIENT_CREDENTIALS_GRANT = "client_credentials"
 
-token_router = APIRouter()
+token_router = APIRouter(tags=["token"])
 
 
 def _granted_scopes(requested: str | None, client: Client) -> list[str]:
@@ -36,7 +36,7 @@ async def token(
     response: Response,
     form_data: Annotated[ClientCredentialsForm, Form()],
     authorization: Annotated[str | None, Header()] = None,
-):
+) -> TokenResponse:
     if form_data.grant_type != CLIENT_CREDENTIALS_GRANT:
         raise OAuth2Error(
             "unsupported_grant_type",
@@ -50,7 +50,7 @@ async def token(
     )
 
     client = authenticate_client(credentials.client_id, credentials.client_secret)
-    if not client:
+    if client is None:
         raise invalid_client(
             "client authentication failed",
             used_basic_auth=credentials.used_basic_auth,
@@ -101,9 +101,8 @@ async def token(
     # §5.1 requires tokens never be cached by intermediaries.
     response.headers.update(NO_STORE_HEADERS)
 
-    return {
-        "access_token": access_token,
-        "token_type": "Bearer",
-        "expires_in": settings.jwt.access_token_expire_minutes * 60,
-        "scope": " ".join(granted_scopes),
-    }
+    return TokenResponse(
+        access_token=access_token,
+        expires_in=settings.jwt.access_token_expire_minutes * 60,
+        scope=" ".join(granted_scopes),
+    )

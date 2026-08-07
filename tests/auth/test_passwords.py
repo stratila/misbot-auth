@@ -45,10 +45,10 @@ def test_authenticate_client_rejects_wrong_secret(monkeypatch):
         lambda client_id: client if client_id == "test-client" else None,
     )
 
-    assert authenticate_client("test-client", "wrong") is False
+    assert authenticate_client("test-client", "wrong") is None
 
 
 def test_authenticate_client_rejects_unknown_client(monkeypatch):
     monkeypatch.setattr("misbot_auth_server.auth.passwords.get_client", lambda client_id: None)
 
-    assert authenticate_client("nope", "whatever") is False
+    assert authenticate_client("nope", "whatever") is None
