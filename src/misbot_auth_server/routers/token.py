@@ -49,7 +49,7 @@ async def token(
         form_data.client_secret,
     )
 
-    client = authenticate_client(credentials.client_id, credentials.client_secret)
+    client = await authenticate_client(credentials.client_id, credentials.client_secret)
     if client is None:
         raise invalid_client(
             "client authentication failed",

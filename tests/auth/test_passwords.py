@@ -18,37 +18,38 @@ def test_verify_password_rejects_wrong_password():
     assert not verify_password("wrong", hashed)
 
 
-def test_authenticate_client_returns_client_on_valid_secret(monkeypatch):
+def _known_client(monkeypatch) -> Client:
+    """Make one client resolvable through the patched lookup."""
     client = Client(
         client_id="test-client",
         client_type="confidential",
         hashed_secret=get_password_hash("s3cret"),
         allowed_scopes=["read"],
     )
-    monkeypatch.setattr(
-        "misbot_auth_server.auth.passwords.get_client",
-        lambda client_id: client if client_id == "test-client" else None,
-    )
 
-    assert authenticate_client("test-client", "s3cret") == client
+    async def _get_client(client_id):
+        return client if client_id == "test-client" else None
 
-
-def test_authenticate_client_rejects_wrong_secret(monkeypatch):
-    client = Client(
-        client_id="test-client",
-        client_type="confidential",
-        hashed_secret=get_password_hash("s3cret"),
-        allowed_scopes=["read"],
-    )
-    monkeypatch.setattr(
-        "misbot_auth_server.auth.passwords.get_client",
-        lambda client_id: client if client_id == "test-client" else None,
-    )
-
-    assert authenticate_client("test-client", "wrong") is None
+    monkeypatch.setattr("misbot_auth_server.auth.passwords.get_client", _get_client)
+    return client
 
 
-def test_authenticate_client_rejects_unknown_client(monkeypatch):
-    monkeypatch.setattr("misbot_auth_server.auth.passwords.get_client", lambda client_id: None)
+async def test_authenticate_client_returns_client_on_valid_secret(monkeypatch):
+    client = _known_client(monkeypatch)
 
-    assert authenticate_client("nope", "whatever") is None
+    assert await authenticate_client("test-client", "s3cret") == client
+
+
+async def test_authenticate_client_rejects_wrong_secret(monkeypatch):
+    _known_client(monkeypatch)
+
+    assert await authenticate_client("test-client", "wrong") is None
+
+
+async def test_authenticate_client_rejects_unknown_client(monkeypatch):
+    async def _get_client(client_id):
+        return None
+
+    monkeypatch.setattr("misbot_auth_server.auth.passwords.get_client", _get_client)
+
+    assert await authenticate_client("nope", "whatever") is None

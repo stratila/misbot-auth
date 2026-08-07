@@ -16,8 +16,8 @@ def get_password_hash(password):
     return password_hash.hash(password)
 
 
-def authenticate_client(client_id: str, client_secret: str) -> Client | None:
-    client = get_client(client_id=client_id)
+async def authenticate_client(client_id: str, client_secret: str) -> Client | None:
+    client = await get_client(client_id=client_id)
     if not client:
         # throwaway against a timing / user-enumeration attack
         verify_password(plain_password=client_secret, hashed_password=DUMMY_HASH)

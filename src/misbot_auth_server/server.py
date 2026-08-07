@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
@@ -6,9 +8,19 @@ from misbot_auth_server.auth.errors import (
     oauth2_error_handler,
     validation_error_handler,
 )
+from misbot_auth_server.db.engine import engine
 from misbot_auth_server.routers import ROUTERS
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    # Close pooled SQLite connections rather than leaving them to the garbage
+    # collector, which would run them on the wrong event loop.
+    await engine.dispose()
+
+
+app = FastAPI(lifespan=lifespan)
 
 for router in ROUTERS:
     app.include_router(router)

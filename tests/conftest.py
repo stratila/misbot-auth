@@ -25,10 +25,11 @@ def register_client(monkeypatch):
                 **overrides,
             }
         )
-        monkeypatch.setattr(
-            "misbot_auth_server.auth.passwords.get_client",
-            lambda client_id: client if client_id == client.client_id else None,
-        )
+
+        async def _get_client(client_id):
+            return client if client_id == client.client_id else None
+
+        monkeypatch.setattr("misbot_auth_server.auth.passwords.get_client", _get_client)
         return client
 
     return _register

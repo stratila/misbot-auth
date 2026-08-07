@@ -8,15 +8,18 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "aiosqlite>=0.22.1",
+    "alembic>=1.18.1",
     "fastapi[standard]>=0.140.0",
     "pwdlib[argon2]>=0.3.0",
     "pydantic-settings>=2.14.2",
     "pyjwt[crypto]>=2.13.0",
     "python-multipart>=0.0.32",
+    "sqlalchemy[asyncio]>=2.0.45",
 ]
 
 [project.scripts]
-misbot-auth-server = "misbot_auth_server:main"
+misbot-auth-server = "misbot_auth_server.cli:main"
 
 [build-system]
 requires = ["uv_build>=0.11.28,<0.12.0"]
@@ -26,12 +29,17 @@ build-backend = "uv_build"
 dev = [
     "pre-commit>=4.6.1",
     "pytest>=9.1.1",
+    "pytest-asyncio>=0.21",
     "ruff>=0.16.1",
 ]
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+
+[tool.ruff.lint.per-file-ignores]
+# Alembic generates these; the boilerplate header keeps unused imports around.
+"alembic/versions/*.py" = ["F401"]
 
 [tool.ruff.lint]
 select = [
@@ -44,3 +52,5 @@ select = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

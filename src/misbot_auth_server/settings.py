@@ -1,5 +1,25 @@
+import os
+from pathlib import Path
+
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, NestedSecretsSettingsSource, SettingsConfigDict
+
+from misbot_auth_server.db.settings import DatabaseSettings
+
+SECRETS_DIR_ENV_VAR = "MISBOT_AUTH_SECRETS_DIR"
+DEFAULT_SECRETS_DIR = "secrets"
+
+
+def secrets_dir() -> Path:
+    """Where file-backed secrets live.
+
+    ``secrets_dir`` is class-level configuration rather than a field, so the
+    normal settings machinery cannot read it from the environment. It is
+    resolved here and passed to the constructor as ``_secrets_dir`` instead.
+    The path is made absolute so it does not depend on the working directory:
+    ``./secrets`` for local development, a mount point in a container.
+    """
+    return Path(os.environ.get(SECRETS_DIR_ENV_VAR, DEFAULT_SECRETS_DIR)).expanduser().resolve()
 
 
 class JWTSettings(BaseSettings):
@@ -16,7 +36,8 @@ class Settings(BaseSettings):
         env_file=(".env.dev", ".env"),
         env_prefix="MISBOT_AUTH_",
         env_nested_delimiter="__",
-        secrets_dir="secrets",
+        # `secrets_dir` is intentionally absent: it is supplied per-instance via
+        # `_secrets_dir` so it can be pointed at a container mount.
         secrets_nested_delimiter="-",
     )
 
@@ -37,9 +58,10 @@ class Settings(BaseSettings):
         )
 
     jwt: JWTSettings
+    database: DatabaseSettings = Field(default_factory=DatabaseSettings)
 
 
-settings = Settings()
+settings = Settings(_secrets_dir=secrets_dir())
 
 
 if __name__ == "__main__":
