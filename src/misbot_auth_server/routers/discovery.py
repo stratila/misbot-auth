@@ -32,5 +32,5 @@ async def authorization_server_metadata():
         # This server has no authorization endpoint, so it supports no
         # response types; the member is required, so report it as empty.
         "response_types_supported": [],
-        "token_endpoint_auth_methods_supported": ["client_secret_post"],
+        "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
     }

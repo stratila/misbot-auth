@@ -15,12 +15,12 @@ def client():
 def register_client(monkeypatch):
     """Register a client with the given overrides as the only known client."""
 
-    def _register(**overrides):
+    def _register(*, secret="s3cret", **overrides):
         client = Client(
             **{
                 "client_id": "test-client",
                 "client_type": "confidential",
-                "hashed_secret": get_password_hash("s3cret"),
+                "hashed_secret": get_password_hash(secret),
                 "allowed_scopes": ["read", "write"],
                 **overrides,
             }

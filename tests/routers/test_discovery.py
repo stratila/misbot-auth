@@ -1,3 +1,5 @@
+from base64 import b64encode
+
 import jwt
 import pytest
 from jwt import PyJWKSet
@@ -92,3 +94,25 @@ def test_metadata_advertises_the_token_endpoint_and_jwks(client):
     assert metadata["token_endpoint"] == f"{settings.jwt.issuer}/token"
     assert metadata["jwks_uri"] == f"{settings.jwt.issuer}/.well-known/jwks.json"
     assert metadata["grant_types_supported"] == ["client_credentials"]
+
+
+def test_metadata_advertises_both_supported_auth_methods(client, registered_client):
+    metadata = client.get("/.well-known/oauth-authorization-server").json()
+
+    assert set(metadata["token_endpoint_auth_methods_supported"]) == {
+        "client_secret_basic",
+        "client_secret_post",
+    }
+
+    # Clients pick their auth method from this document, so both must work.
+    body = {"grant_type": "client_credentials"}
+    basic = b64encode(b"test-client:s3cret").decode()
+
+    via_post = client.post(
+        "/token",
+        data={**body, "client_id": "test-client", "client_secret": "s3cret"},
+    )
+    via_basic = client.post("/token", data=body, headers={"Authorization": f"Basic {basic}"})
+
+    assert via_post.status_code == 200
+    assert via_basic.status_code == 200

@@ -1,11 +1,22 @@
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
-from misbot_auth_server.auth.discovery import discovery_router
-from misbot_auth_server.auth.router import auth_router
+from misbot_auth_server.auth.errors import (
+    OAuth2Error,
+    oauth2_error_handler,
+    validation_error_handler,
+)
+from misbot_auth_server.routers import ROUTERS
 
 app = FastAPI()
-app.include_router(auth_router)
-app.include_router(discovery_router)
+
+for router in ROUTERS:
+    app.include_router(router)
+
+app.add_exception_handler(OAuth2Error, oauth2_error_handler)
+# This server only accepts input at the token endpoint, so a malformed request
+# is always an OAuth error and should be rendered in the OAuth error shape.
+app.add_exception_handler(RequestValidationError, validation_error_handler)
 
 
 @app.get("/")
