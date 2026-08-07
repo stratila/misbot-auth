@@ -32,6 +32,12 @@ dev = [
     "pytest-asyncio>=0.21",
     "ruff>=0.16.1",
 ]
+# Kept separate from `dev` so the test image layers only what running the suite
+# needs on top of the production virtualenv.
+test = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=0.21",
+]
 
 [tool.ruff]
 target-version = "py312"

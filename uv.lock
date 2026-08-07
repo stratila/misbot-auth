@@ -765,6 +765,10 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "ruff" },
 ]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -784,6 +788,10 @@ dev = [
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-asyncio", specifier = ">=0.21" },
     { name = "ruff", specifier = ">=0.16.1" },
+]
+test = [
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=0.21" },
 ]
 
 [[package]]
