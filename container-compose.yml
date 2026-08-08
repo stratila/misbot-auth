@@ -4,6 +4,10 @@ services:
       context: .
       target: "dev"
       dockerfile: Containerfile
+    # These two services share a volume, not a socket, so neither needs to reach
+    # the other over the network. pasta gives each its own namespace and
+    # forwards published ports without the netfilter rules a bridge would need.
+    network_mode: pasta
     volumes:
       # The repo, so --reload picks up edits without a rebuild.
       - type: bind
@@ -29,6 +33,7 @@ services:
   # `podman compose run --rm sqlite` opens a shell against the live database.
   sqlite:
     image: docker.io/nouchka/sqlite3:latest
+    network_mode: pasta
     volumes:
       - type: volume
         source: sqlite-db

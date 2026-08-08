@@ -139,6 +139,13 @@ podman compose -f container-compose.yml run --rm sqlite   # sqlite3 shell on the
 The dev target bind-mounts the repository for `--reload` and sets
 `EXECUTE_MIGRATIONS=true`, so the schema is created on first start.
 
+Both services use `network_mode: pasta` rather than a compose bridge network.
+They share a volume, not a socket, so neither needs to reach the other by name,
+and pasta forwards published ports without the netfilter rules a bridge needs --
+which is what makes this work on kernels without full nftables NAT support, WSL2
+among them. Swap it for a bridge network if you ever add a service that has to
+resolve another by hostname.
+
 ### Tests in a container
 
 ```bash
