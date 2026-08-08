@@ -22,3 +22,5 @@ __pycache__
 Containerfile
 .containerignore
 container-compose.yml
+# Deployment descriptors: consumed on the host, never inside the image.
+quadlets

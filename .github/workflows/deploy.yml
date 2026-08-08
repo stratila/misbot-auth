@@ -1,0 +1,127 @@
+name: Deploy misbot authorization server
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image_tag:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, prod]
+        required: true
+      image_tag:
+        description: "e.g. ghcr.io/org/misbot-auth-server:sha-abc1234"
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Write application .env file
+        run: |
+          cat <<EOF > .env
+          MISBOT_AUTH_JWT__ISSUER=${{ secrets.JWT_ISSUER }}
+          MISBOT_AUTH_JWT__AUDIENCE=${{ secrets.JWT_AUDIENCE }}
+          MISBOT_AUTH_DATABASE__SQL_ECHO=False
+          EOF
+
+      # The signing key is a file, not an env var: the image reads
+      # $MISBOT_AUTH_SECRETS_DIR/misbot_auth_jwt-private_key.
+      - name: Write signing key
+        run: |
+          cat <<'EOF' > misbot_auth_jwt-private_key
+          ${{ secrets.JWT_PRIVATE_KEY }}
+          EOF
+
+      - name: Stop the service
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "systemctl --user stop misbot-auth-app.service || true"
+
+      - name: Login to GHCR on remote host
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+          "podman login ghcr.io -u ${{ github.actor }} --password-stdin" \
+          <<< "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Pull image
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "podman pull ${{ inputs.image_tag }}"
+
+      # Both units carry {IMAGE}; the migration must run the same image the
+      # server is about to run, or it would apply the wrong schema.
+      - name: Render quadlet templates
+        run: |
+          mkdir -p /tmp/quadlets
+          for unit in quadlets/*.container; do
+            sed \
+              -e "s|{IMAGE}|${{ inputs.image_tag }}|g" \
+              -e "s|{PORT}|${{ vars.PORT }}|g" \
+              "$unit" > "/tmp/quadlets/$(basename "$unit")"
+          done
+
+      # `~/.local/share/misbot-auth/db` is a bind mount, and podman will not
+      # create it -- the unit fails with `statfs ...: no such file` if it is
+      # missing. Named volumes are created for you; bind mounts are not.
+      - name: Create host directories
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "mkdir -p ~/.config/containers/systemd ~/.config/misbot-auth/secrets ~/.local/share/misbot-auth/db \
+             && chmod 700 ~/.config/misbot-auth/secrets"
+
+      - name: Deploy files to host
+        run: |
+          scp /tmp/quadlets/* ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/.config/containers/systemd/
+          scp .env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/.config/misbot-auth/.env
+          scp misbot_auth_jwt-private_key \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:~/.config/misbot-auth/secrets/
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "chmod 600 ~/.config/misbot-auth/.env ~/.config/misbot-auth/secrets/misbot_auth_jwt-private_key"
+
+      # `restart`, not `start`: the unit is RemainAfterExit, so it stays active
+      # after a successful run and `start` on an active unit does nothing --
+      # every deploy after the first would silently skip its migrations.
+      # Being a one-shot unit, this blocks until alembic exits and returns its
+      # status, so a bad migration fails the deploy right here.
+      - name: Apply migrations
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+            "systemctl --user daemon-reload && systemctl --user restart misbot-auth-migrate.service"
+
+      - name: Start the service
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "systemctl --user start misbot-auth-app.service"
+
+      - name: Check migrations succeeded
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} '
+            if ! systemctl --user is-active --quiet misbot-auth-migrate.service; then
+              echo "::error::database migrations failed"
+              systemctl --user status misbot-auth-migrate.service --no-pager || true
+              podman logs --tail 50 misbot-auth-migrate || true
+              exit 1
+            fi
+            echo "migrations applied"
+          '
