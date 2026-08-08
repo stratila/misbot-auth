@@ -22,7 +22,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 
 FROM python:3.12-slim AS prod
-RUN useradd -m app
+# The uid is pinned, not left to useradd's "next free id". Deployments map the
+# host user onto this uid (UserNS=keep-id:uid=1000,gid=1000), so if it ever
+# drifted, the bind-mounted database would silently become unwritable. Being
+# explicit also makes the build fail loudly if the base image ever claims 1000,
+# instead of quietly handing out 1001.
+RUN groupadd --gid 1000 app \
+    && useradd --create-home --uid 1000 --gid 1000 app
 
 # Set here rather than inherited from `base`: this stage starts from a clean
 # image, and without it the working directory would be `/`, which would leave

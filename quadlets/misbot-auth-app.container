@@ -29,7 +29,13 @@ Volume=%h/.config/misbot-auth/secrets:/run/secrets:ro,Z
 # bind-mounted database readable from the host. Without it, rootless podman maps
 # `app` into the subuid range: the container either cannot write the directory,
 # or `:U` chowns it to a subuid and the host user loses access to its own data.
-UserNS=keep-id
+#
+# The uid/gid are required, not optional. `app` is uid 1000 in the image, and
+# bare `keep-id` maps the host user to its own uid -- which only lines up if the
+# host user happens to be 1000 too. On any other account the database directory
+# appears owned by a uid the process is not, and alembic fails with
+# "unable to open database file". Pinning 1000 makes it hold for any host user.
+UserNS=keep-id:uid=1000,gid=1000
 
 EnvironmentFile=%h/.config/misbot-auth/.env
 # Migrations belong to misbot-auth-migrate.service, so a restart of this unit

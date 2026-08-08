@@ -13,7 +13,9 @@ Exec=/opt/venv/bin/alembic -c /app/alembic.ini upgrade head
 # database is a bind mount and why UserNS=keep-id is required.
 Volume=%h/.local/share/misbot-auth/db:/app/db:Z
 Volume=%h/.config/misbot-auth/secrets:/run/secrets:ro,Z
-UserNS=keep-id
+# uid/gid pinned to the image's `app` user; see misbot-auth-app.container for why
+# bare keep-id only works when the host account happens to be uid 1000.
+UserNS=keep-id:uid=1000,gid=1000
 EnvironmentFile=%h/.config/misbot-auth/.env
 Label=app=misbot-auth
 
