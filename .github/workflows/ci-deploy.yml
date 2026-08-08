@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-      - dev
+      - feat/implement-oauth2-endpoints #dev
 
 jobs:
   test:
@@ -23,7 +23,8 @@ jobs:
   deploy-dev:
     name: Deploy Dev Env
     needs: build-and-push
-    if: github.ref == 'refs/heads/dev'
+    # dev
+    if: github.ref == 'refs/heads/feat/implement-oauth2-endpoints'
     uses: ./.github/workflows/deploy.yml
     with:
       environment: dev
