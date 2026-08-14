@@ -1,0 +1,26 @@
+# Never let key material or local config into the build context. The image gets
+# its signing key from a mount at runtime, never from a layer.
+secrets
+*.env*
+
+# Local database files; the real one lives in a volume.
+db
+*.sqlite
+*.sqlite-journal
+
+.venv
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+__pycache__
+.ruff_cache
+.pytest_cache
+
+Containerfile
+.containerignore
+container-compose.yml
+# Deployment descriptors: consumed on the host, never inside the image.
+quadlets
