@@ -1,0 +1,47 @@
+services:
+  app:
+    build:
+      context: .
+      target: "dev"
+      dockerfile: Containerfile
+    # These two services share a volume, not a socket, so neither needs to reach
+    # the other over the network. pasta gives each its own namespace and
+    # forwards published ports without the netfilter rules a bridge would need.
+    network_mode: pasta
+    volumes:
+      # The repo, so --reload picks up edits without a rebuild.
+      - type: bind
+        source: .
+        target: /app
+      # Mounted over the bind above, so the database survives a rebuild and
+      # never lands in the working tree.
+      - type: volume
+        source: sqlite-db
+        target: /app/db
+      # Read-only: the server needs to read the signing key, never write it.
+      - type: bind
+        source: ./secrets
+        target: /run/secrets
+        read_only: true
+    environment:
+      MISBOT_AUTH_JWT__ISSUER: http://localhost:8080
+      MISBOT_AUTH_JWT__AUDIENCE: http://localhost:8081
+      MISBOT_AUTH_DATABASE__SQL_ECHO: "true"
+    ports:
+      - "8080:8080"
+
+  # `podman compose run --rm sqlite` opens a shell against the live database.
+  sqlite:
+    image: docker.io/nouchka/sqlite3:latest
+    network_mode: pasta
+    volumes:
+      - type: volume
+        source: sqlite-db
+        target: /db
+    working_dir: /db
+    entrypoint: ["sqlite3", "authdb.sqlite"]
+    stdin_open: true
+    tty: true
+
+volumes:
+  sqlite-db:

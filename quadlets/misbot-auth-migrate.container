@@ -1,0 +1,28 @@
+[Unit]
+Description=misbot authorization server database migrations
+After=network-online.target podman.service
+Wants=network-online.target podman.service
+
+[Container]
+Image={IMAGE}
+ContainerName=misbot-auth-migrate
+Exec=/opt/venv/bin/alembic -c /app/alembic.ini upgrade head
+
+# Same database and key mounts as the application, so the migration writes the
+# file the server will later read. See misbot-auth-app.container for why the
+# database is a bind mount and why UserNS=keep-id is required.
+Volume=%h/.local/share/misbot-auth/db:/app/db:Z
+Volume=%h/.config/misbot-auth/secrets:/run/secrets:ro,Z
+# uid/gid pinned to the image's `app` user; see misbot-auth-app.container for why
+# bare keep-id only works when the host account happens to be uid 1000.
+UserNS=keep-id:uid=1000,gid=1000
+EnvironmentFile=%h/.config/misbot-auth/.env
+Label=app=misbot-auth
+
+[Service]
+# Runs to completion instead of staying up. `systemctl start` on a oneshot unit
+# blocks until it exits and returns its status, which is what lets the deploy
+# job fail on a bad migration. RemainAfterExit keeps the success visible
+# afterwards, so the application unit's Requires= is satisfied.
+Type=oneshot
+RemainAfterExit=yes

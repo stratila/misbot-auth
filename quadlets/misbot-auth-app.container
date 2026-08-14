@@ -1,0 +1,51 @@
+[Unit]
+Description=misbot authorization server
+After=network-online.target podman.service
+Wants=network-online.target podman.service
+# The schema is applied by a separate one-shot unit, and Requires= means a failed
+# migration keeps this from starting at all rather than letting it serve a
+# database it has no schema for.
+Requires=misbot-auth-migrate.service
+After=misbot-auth-migrate.service
+
+[Container]
+Image={IMAGE}
+ContainerName=misbot-auth-app
+PublishPort=127.0.0.1:{PORT}:8080
+
+# The database is a bind mount rather than a named volume, so the SQLite file is
+# an ordinary host file: backed up by whatever backs up the home directory, and
+# openable with sqlite3 without going through podman. Unlike a named volume,
+# podman will not create this directory -- the deploy job does, before starting
+# the unit. Without it the service fails with `statfs ...: no such file`.
+Volume=%h/.local/share/misbot-auth/db:/app/db:Z
+
+# The RSA signing key, read-only: the server reads it and must never write it.
+# The image already points MISBOT_AUTH_SECRETS_DIR here and expects the key to be
+# the file `misbot_auth_jwt-private_key` inside this directory.
+Volume=%h/.config/misbot-auth/secrets:/run/secrets:ro,Z
+
+# Maps the container's `app` user onto the host user, which is what keeps the
+# bind-mounted database readable from the host. Without it, rootless podman maps
+# `app` into the subuid range: the container either cannot write the directory,
+# or `:U` chowns it to a subuid and the host user loses access to its own data.
+#
+# The uid/gid are required, not optional. `app` is uid 1000 in the image, and
+# bare `keep-id` maps the host user to its own uid -- which only lines up if the
+# host user happens to be 1000 too. On any other account the database directory
+# appears owned by a uid the process is not, and alembic fails with
+# "unable to open database file". Pinning 1000 makes it hold for any host user.
+UserNS=keep-id:uid=1000,gid=1000
+
+EnvironmentFile=%h/.config/misbot-auth/.env
+# Migrations belong to misbot-auth-migrate.service, so a restart of this unit
+# never touches the schema.
+Environment=EXECUTE_MIGRATIONS=false
+Label=app=misbot-auth
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,41 @@
+name: CI pipeline for application deployment
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  test:
+    name: Run Tests
+    uses: ./.github/workflows/test.yml
+
+  build-and-push:
+    name: Build and Push
+    permissions:
+      contents: read
+      packages: write
+    needs: test
+    uses: ./.github/workflows/build-and-push.yml
+    secrets: inherit
+
+  deploy-dev:
+    name: Deploy Dev Env
+    needs: build-and-push
+    if: github.ref == 'refs/heads/dev'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+      image_tag: ${{ needs.build-and-push.outputs.image_tag }}
+    secrets: inherit
+
+  deploy-prod:
+    name: Deploy Prod Env
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: prod
+      image_tag: ${{ needs.build-and-push.outputs.image_tag }}
+    secrets: inherit
